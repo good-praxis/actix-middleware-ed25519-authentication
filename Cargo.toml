@@ -1,5 +1,5 @@
 [package]
-name = "actix-web-middleware-Ed25519-authentication"
+name = "actix-web-middleware-ed25519-authentication"
 version = "0.1.0"
 edition = "2021"
 

@@ -71,7 +71,7 @@ where
         };
         let content = timestamp.as_bytes().iter().chain(/*FIXME: body.as_bytes()*/"".as_bytes().iter()).cloned().collect::<Vec<u8>>();
     
-        match public_key.verify(&content.as_slice(), &signature) {
+        match public_key.verify(&content, &signature) {
             Ok(_) =>    { let fut = self.service.call(req);
                 Box::pin(async move {
                     let res = fut.await?;
