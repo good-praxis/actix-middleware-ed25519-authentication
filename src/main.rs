@@ -2,9 +2,11 @@ use std::future::{ready, Ready};
 
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
-    Error,
+    Error, error::ErrorUnauthorized,
 };
 use futures_util::future::LocalBoxFuture;
+use ed25519_dalek::{PublicKey, Signature, Verifier};
+
 
 
 pub struct Ed25519Authenticator;
@@ -54,16 +56,29 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        println!("Hi from start. You requested: {}", req.path());
-
-        let fut = self.service.call(req);
-
-        Box::pin(async move {
-            let res = fut.await?;
-
-            println!("Hi from response");
-            Ok(res)
-        })
+        let public_key = PublicKey::from_bytes(&hex::decode(self.data.public_key).unwrap()).unwrap();
+        let timestamp =  req.headers().get(self.data.timestamp_header_name).unwrap();
+        let signature = { 
+            
+            let header = req.headers().get(self.data.signature_header_name).unwrap();
+            let decoded_header = hex::decode(header).unwrap();
+    
+            let mut sig_arr: [u8; 64] = [0; 64];
+            for (i, byte) in decoded_header.into_iter().enumerate() {
+                sig_arr[i] = byte;
+            }
+            Signature::from_bytes(&sig_arr).unwrap()
+        };
+        let content = timestamp.as_bytes().iter().chain(/*FIXME: body.as_bytes()*/"".as_bytes().iter()).cloned().collect::<Vec<u8>>();
+    
+        match public_key.verify(&content.as_slice(), &signature) {
+            Ok(_) =>    { let fut = self.service.call(req);
+                Box::pin(async move {
+                    let res = fut.await?;
+                    Ok(res)
+                })},
+            Err(_) => Box::pin(ready(Err(ErrorUnauthorized("invalid request signature"))))
+        }    
     }
 }
 
