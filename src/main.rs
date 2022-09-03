@@ -1,15 +1,18 @@
-use std::future::{ready, Ready};
+use std::{future::{ready, Ready}, env, borrow::Borrow};
 
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
-    Error, error::ErrorUnauthorized,
+    Error, error::ErrorUnauthorized, HttpServer, App, web, HttpResponse,
 };
 use futures_util::future::LocalBoxFuture;
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 
 
 
-pub struct Ed25519Authenticator;
+pub struct Ed25519Authenticator {
+    data: MiddlewareData
+}
+
 
 impl<S, B> Transform<S, ServiceRequest> for Ed25519Authenticator
 where
@@ -20,30 +23,27 @@ where
     type Response = ServiceResponse<B>;
     type Error = Error;
     type InitError = ();
-    type Transform = Ed25519AuthenticatorMiddleware<'static, S>;
+    type Transform = Ed25519AuthenticatorMiddleware<S>;
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        ready(Ok(Ed25519AuthenticatorMiddleware { service, data: MiddlewareData {
-            public_key: "foo",
-            signature_header_name: "bar",
-            timestamp_header_name: "rab",
-        } }))
+        ready(Ok(Ed25519AuthenticatorMiddleware { service, data: self.data.clone() }))
     }
 }
 
-pub struct MiddlewareData<'a> {
-    public_key: &'a str,
-    signature_header_name: &'a str,
-    timestamp_header_name: &'a str,
+#[derive(Clone, Debug)]
+pub struct MiddlewareData {
+    public_key: String,
+    signature_header_name: String,
+    timestamp_header_name: String,
 }
 
-pub struct Ed25519AuthenticatorMiddleware<'a, S> {
+pub struct Ed25519AuthenticatorMiddleware<S> {
     service: S,
-    data: MiddlewareData<'a>,
+    data: MiddlewareData,
 }
 
-impl<'a, S, B> Service<ServiceRequest> for Ed25519AuthenticatorMiddleware<'a, S>
+impl<S, B> Service<ServiceRequest> for Ed25519AuthenticatorMiddleware<S>
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
@@ -56,11 +56,18 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        let public_key = PublicKey::from_bytes(&hex::decode(self.data.public_key).unwrap()).unwrap();
-        let timestamp =  req.headers().get(self.data.timestamp_header_name).unwrap();
+        let data = self.data.clone();
+
+        println!("{:#?}", data);
+
+        let public_key = PublicKey::from_bytes(&hex::decode(&data.public_key).unwrap_or_else(|_| {
+            println!("Couldn't decode public key!");
+            Vec::<u8>::new()
+        })).unwrap();
+        let timestamp =  req.headers().get(data.timestamp_header_name).unwrap();
         let signature = { 
             
-            let header = req.headers().get(self.data.signature_header_name).unwrap();
+            let header = req.headers().get(data.signature_header_name).unwrap();
             let decoded_header = hex::decode(header).unwrap();
     
             let mut sig_arr: [u8; 64] = [0; 64];
@@ -82,6 +89,17 @@ where
     }
 }
 
-fn main() {
-    println!("Development self test:")
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+
+    const PORT: u16 = 3000;
+    let public_key = env::var("PUBLIC_KEY").unwrap_or_else(|_| panic!("environment variable \"PUBLIC_KEY\" not found!"));
+
+
+    HttpServer::new(move || {
+        App::new().wrap(Ed25519Authenticator { data: MiddlewareData {public_key: public_key.clone(), signature_header_name: String::from("X-Signature-Ed25519"), timestamp_header_name: String::from("X-Signature-Timestamp") }}).route("/", web::post().to(HttpResponse::Ok))
+    })
+    .bind(("127.0.0.1", PORT))?
+    .run()
+    .await
 }
