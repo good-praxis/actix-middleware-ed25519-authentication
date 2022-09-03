@@ -18,19 +18,30 @@ where
     type Response = ServiceResponse<B>;
     type Error = Error;
     type InitError = ();
-    type Transform = Ed25519AuthenticatorMiddleware<S>;
+    type Transform = Ed25519AuthenticatorMiddleware<'static, S>;
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        ready(Ok(Ed25519AuthenticatorMiddleware { service }))
+        ready(Ok(Ed25519AuthenticatorMiddleware { service, data: MiddlewareData {
+            public_key: "foo",
+            signature_header_name: "bar",
+            timestamp_header_name: "rab",
+        } }))
     }
 }
 
-pub struct Ed25519AuthenticatorMiddleware<S> {
-    service: S,
+pub struct MiddlewareData<'a> {
+    public_key: &'a str,
+    signature_header_name: &'a str,
+    timestamp_header_name: &'a str,
 }
 
-impl<S, B> Service<ServiceRequest> for Ed25519AuthenticatorMiddleware<S>
+pub struct Ed25519AuthenticatorMiddleware<'a, S> {
+    service: S,
+    data: MiddlewareData<'a>,
+}
+
+impl<'a, S, B> Service<ServiceRequest> for Ed25519AuthenticatorMiddleware<'a, S>
 where
     S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
