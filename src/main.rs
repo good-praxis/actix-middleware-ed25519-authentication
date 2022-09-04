@@ -122,13 +122,14 @@ where
                 .cloned()
                 .collect::<Vec<u8>>();
 
-            if public_key.verify(&content, &signature).is_err() {
-                return Err(ErrorUnauthorized("Unauthorized"));
+            match public_key.verify(&content, &signature) {
+                Err(_) => Err(ErrorUnauthorized("Unauthorized")),
+                Ok(_) => {
+                    let fut = srv.call(req);
+                    let res = fut.await?;
+                    Ok(res)
+                }
             }
-
-            let fut = srv.call(req);
-            let res = fut.await?;
-            Ok(res)
         }
         .boxed_local()
     }
