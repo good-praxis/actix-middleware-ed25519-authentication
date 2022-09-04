@@ -40,6 +40,25 @@ pub struct MiddlewareData {
     timestamp_header_name: String,
 }
 
+impl Default for MiddlewareData {
+    fn default() -> Self {
+        MiddlewareData {
+            public_key: String::new(),
+            signature_header_name: String::from("X-Signature-Ed25519"),
+            timestamp_header_name: String::from("X-Signature-Timestamp"),
+        }
+    }
+}
+
+impl MiddlewareData {
+    fn new(public_key: &str) -> Self {
+        Self {
+            public_key: String::from(public_key),
+            ..Self::default()
+        }
+    }
+}
+
 pub struct Ed25519AuthenticatorMiddleware<S> {
     service: Rc<S>,
     data: Rc<MiddlewareData>,
@@ -124,11 +143,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(Ed25519Authenticator {
-                data: MiddlewareData {
-                    public_key: public_key.clone(),
-                    signature_header_name: String::from("X-Signature-Ed25519"),
-                    timestamp_header_name: String::from("X-Signature-Timestamp"),
-                },
+                data: MiddlewareData::new(&public_key),
             })
             .route("/", web::post().to(HttpResponse::Ok))
     })
