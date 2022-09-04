@@ -3,6 +3,7 @@ use std::{env, future::Ready, pin::Pin, rc::Rc};
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     error::ErrorUnauthorized,
+    http::header::HeaderValue,
     web::{self, Bytes},
     App, Error, HttpResponse, HttpServer,
 };
@@ -91,21 +92,25 @@ where
         async move {
             let body = req.extract::<Bytes>().await?;
 
+            let default_header = HeaderValue::from_static("");
+
             let public_key =
                 PublicKey::from_bytes(&hex::decode(&data.public_key).unwrap_or_else(|_| {
                     println!("Couldn't decode public key!");
                     Vec::<u8>::new()
                 }))
                 .unwrap();
+
             let timestamp = req
                 .headers()
                 .get(data.timestamp_header_name.clone())
-                .unwrap();
+                .unwrap_or(&default_header);
+
             let signature = {
                 let header = req
                     .headers()
                     .get(data.signature_header_name.clone())
-                    .unwrap();
+                    .unwrap_or(&default_header);
                 let decoded_header = hex::decode(header).unwrap();
 
                 let mut sig_arr: [u8; 64] = [0; 64];
