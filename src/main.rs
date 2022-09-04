@@ -1,14 +1,10 @@
-use std::{
-    env,
-    future::{ready, Ready},
-    pin::Pin,
-    rc::Rc,
-};
+use std::{env, future::Ready, pin::Pin, rc::Rc};
 
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     error::ErrorUnauthorized,
-    web, App, Error, HttpResponse, HttpServer,
+    web::{self, Bytes},
+    App, Error, HttpResponse, HttpServer,
 };
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use futures_util::{future::LocalBoxFuture, FutureExt};
@@ -74,9 +70,7 @@ where
         let srv = self.service.clone();
 
         async move {
-            let body = req.extract::<String>().await?;
-
-            println!("{:#?}", data);
+            let body = req.extract::<Bytes>().await?;
 
             let public_key =
                 PublicKey::from_bytes(&hex::decode(&data.public_key).unwrap_or_else(|_| {
@@ -101,10 +95,11 @@ where
                 }
                 Signature::from_bytes(&sig_arr).unwrap()
             };
+
             let content = timestamp
                 .as_bytes()
                 .iter()
-                .chain(body.as_bytes().iter())
+                .chain(body.as_ref().iter())
                 .cloned()
                 .collect::<Vec<u8>>();
 
