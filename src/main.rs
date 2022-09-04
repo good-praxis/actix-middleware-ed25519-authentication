@@ -1,18 +1,21 @@
-use std::{future::{Ready, ready}, env, pin::Pin, rc::Rc};
+use std::{
+    env,
+    future::{ready, Ready},
+    pin::Pin,
+    rc::Rc,
+};
 
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
-    Error, HttpServer, App, web, HttpResponse, error::ErrorUnauthorized,
+    error::ErrorUnauthorized,
+    web, App, Error, HttpResponse, HttpServer,
 };
-use futures_util::{future::{LocalBoxFuture}, FutureExt };
 use ed25519_dalek::{PublicKey, Signature, Verifier};
-
-
+use futures_util::{future::LocalBoxFuture, FutureExt};
 
 pub struct Ed25519Authenticator {
-    data: MiddlewareData
+    data: MiddlewareData,
 }
-
 
 impl<S, B> Transform<S, ServiceRequest> for Ed25519Authenticator
 where
@@ -27,7 +30,10 @@ where
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        std::future::ready(Ok(Ed25519AuthenticatorMiddleware { service: Rc::new(service), data: Rc::new(self.data.clone()) }))
+        std::future::ready(Ok(Ed25519AuthenticatorMiddleware {
+            service: Rc::new(service),
+            data: Rc::new(self.data.clone()),
+        }))
     }
 }
 
@@ -55,55 +61,81 @@ where
 
     forward_ready!(service);
 
-    fn call(&self, mut req: ServiceRequest) -> Pin<Box<(dyn futures_util::Future<Output = Result<ServiceResponse<B>, actix_web::Error>> + 'static)>> {
+    fn call(
+        &self,
+        mut req: ServiceRequest,
+    ) -> Pin<
+        Box<
+            (dyn futures_util::Future<Output = Result<ServiceResponse<B>, actix_web::Error>>
+                 + 'static),
+        >,
+    > {
         let data = self.data.clone();
         let srv = self.service.clone();
 
         async move {
             let body = req.extract::<String>().await?;
 
-
             println!("{:#?}", data);
 
-            let public_key = PublicKey::from_bytes(&hex::decode(&data.public_key).unwrap_or_else(|_| {
-                println!("Couldn't decode public key!");
-                Vec::<u8>::new()
-            })).unwrap();
-            let timestamp =  req.headers().get(data.timestamp_header_name.clone()).unwrap();
-            let signature = { 
-                
-                let header = req.headers().get(data.signature_header_name.clone()).unwrap();
+            let public_key =
+                PublicKey::from_bytes(&hex::decode(&data.public_key).unwrap_or_else(|_| {
+                    println!("Couldn't decode public key!");
+                    Vec::<u8>::new()
+                }))
+                .unwrap();
+            let timestamp = req
+                .headers()
+                .get(data.timestamp_header_name.clone())
+                .unwrap();
+            let signature = {
+                let header = req
+                    .headers()
+                    .get(data.signature_header_name.clone())
+                    .unwrap();
                 let decoded_header = hex::decode(header).unwrap();
-        
+
                 let mut sig_arr: [u8; 64] = [0; 64];
                 for (i, byte) in decoded_header.into_iter().enumerate() {
                     sig_arr[i] = byte;
                 }
                 Signature::from_bytes(&sig_arr).unwrap()
             };
-            let content = timestamp.as_bytes().iter().chain(body.as_bytes().iter()).cloned().collect::<Vec<u8>>();
-        
+            let content = timestamp
+                .as_bytes()
+                .iter()
+                .chain(body.as_bytes().iter())
+                .cloned()
+                .collect::<Vec<u8>>();
+
             if public_key.verify(&content, &signature).is_err() {
-                return Err(ErrorUnauthorized("Unauthorized"))
+                return Err(ErrorUnauthorized("Unauthorized"));
             }
 
             let fut = srv.call(req);
-                let res = fut.await?;
-                Ok(res)
-            
-    }.boxed_local()
-}}
-
+            let res = fut.await?;
+            Ok(res)
+        }
+        .boxed_local()
+    }
+}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-
     const PORT: u16 = 3000;
-    let public_key = env::var("PUBLIC_KEY").unwrap_or_else(|_| panic!("environment variable \"PUBLIC_KEY\" not found!"));
-
+    let public_key = env::var("PUBLIC_KEY")
+        .unwrap_or_else(|_| panic!("environment variable \"PUBLIC_KEY\" not found!"));
 
     HttpServer::new(move || {
-        App::new().wrap(Ed25519Authenticator { data: MiddlewareData {public_key: public_key.clone(), signature_header_name: String::from("X-Signature-Ed25519"), timestamp_header_name: String::from("X-Signature-Timestamp") }}).route("/", web::post().to(HttpResponse::Ok))
+        App::new()
+            .wrap(Ed25519Authenticator {
+                data: MiddlewareData {
+                    public_key: public_key.clone(),
+                    signature_header_name: String::from("X-Signature-Ed25519"),
+                    timestamp_header_name: String::from("X-Signature-Timestamp"),
+                },
+            })
+            .route("/", web::post().to(HttpResponse::Ok))
     })
     .bind(("127.0.0.1", PORT))?
     .run()
