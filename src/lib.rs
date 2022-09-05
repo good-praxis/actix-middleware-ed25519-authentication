@@ -36,16 +36,16 @@ where
 #[derive(Clone, Debug)]
 pub struct MiddlewareData {
     public_key: String,
-    signature_header_name: String,
-    timestamp_header_name: String,
+    signature_header: String,
+    timestamp_header: String,
 }
 
 impl Default for MiddlewareData {
     fn default() -> Self {
         MiddlewareData {
             public_key: String::new(),
-            signature_header_name: String::from("X-Signature-Ed25519"),
-            timestamp_header_name: String::from("X-Signature-Timestamp"),
+            signature_header: String::from("X-Signature-Ed25519"),
+            timestamp_header: String::from("X-Signature-Timestamp"),
         }
     }
 }
@@ -53,8 +53,19 @@ impl Default for MiddlewareData {
 impl MiddlewareData {
     pub fn new(public_key: &str) -> Self {
         Self {
-            public_key: String::from(public_key),
+            public_key: public_key.into(),
             ..Self::default()
+        }
+    }
+    pub fn new_with_custom_headers(
+        public_key: &str,
+        signature_header: &str,
+        timestamp_header: &str,
+    ) -> Self {
+        Self {
+            public_key: public_key.into(),
+            signature_header: signature_header.into(),
+            timestamp_header: timestamp_header.into(),
         }
     }
 }
@@ -102,13 +113,13 @@ where
 
             let timestamp = req
                 .headers()
-                .get(data.timestamp_header_name.clone())
+                .get(data.timestamp_header.clone())
                 .unwrap_or(&default_header);
 
             let signature = {
                 let header = req
                     .headers()
-                    .get(data.signature_header_name.clone())
+                    .get(data.signature_header.clone())
                     .unwrap_or(&default_header);
                 let decoded_header = hex::decode(header).unwrap();
 
