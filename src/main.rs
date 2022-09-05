@@ -1,5 +1,5 @@
+use actix_middleware_ed25519_authentication::{Ed25519Authenticator, MiddlewareData};
 use actix_web::{web, App, HttpResponse, HttpServer};
-use actix_web_middleware_ed25519_authentication::{Ed25519Authenticator, MiddlewareData};
 use std::env;
 
 // For testing during development
