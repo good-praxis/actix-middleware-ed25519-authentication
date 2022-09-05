@@ -2,6 +2,10 @@
 name = "actix-middleware-ed25519-authentication"
 version = "0.1.0"
 edition = "2021"
+description = "A middleware designed to reject incoming requests that do not have a valid ed25519 signature"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/good-praxis/actix-middleware-ed25519-authentication"
+keywords = ["actix-web-middleware", "actix-middleware", "ed25519", "authentication"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,3 +14,6 @@ futures-util = "0"
 actix-web = "4"
 ed25519-dalek = "1"
 hex = "0.4"
+
+[badges]
+maintenance = { status = "passively-maintained"}
