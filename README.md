@@ -11,16 +11,12 @@ You can use the Ed25519 Authentication Middleware by wrapping them around your a
 With a provided Ed25519 `&public_key` of `&str`, you can initalize the middleware thusly:
 
 ```
-HttpServer::new(move || {
-        App::new()
-            .wrap(Ed25519Authenticator {
-                data: MiddlewareData::new(&public_key),
-            })
-            .route("/", web::post().to(HttpResponse::Ok))
+// App::new()
+    .wrap(Ed25519Authenticator {
+        data: MiddlewareData::new(&public_key),
+        })
     })
-    .bind(("127.0.0.1", PORT))?
-    .run()
-    .await
+
 ```
 
 ### Public Key and Custom Headers
@@ -28,20 +24,15 @@ HttpServer::new(move || {
 This previous example assumes the requests you receive to include the headers `X-Signature-Ed25519` and `X-Signature-Timestamp`, should they differ from that default, you can initalize the middleware with custom headers like this:
 
 ```
-HttpServer::new(move || {
-        App::new()
-            .wrap(Ed25519Authenticator {
-                data: MiddlewareData::new_with_custom_headers(
-                    &public_key,
-                    "custom_sig",
-                    "custom_timestamp",
-                ),
-            })
-            .route("/", web::post().to(HttpResponse::Ok))
+// App::new()
+    .wrap(Ed25519Authenticator {
+        data: MiddlewareData::new_with_custom_headers(
+            &public_key,
+            "custom_sig",
+            "custom_timestamp",
+        ),
     })
-    .bind(("127.0.0.1", PORT))?
-    .run()
-    .await
+
 ```
 
 ## Contributing
