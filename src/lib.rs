@@ -201,6 +201,8 @@ where
 
     // TODO: refactor into standalone `pub fn`, offering usage with `wrap_fn()`
     // TODO: respect `reject` bool
+    /// # Panics
+    /// If reject is set to false, and the signature is invalid, this function will panic. This is unimplemented behavior.
     fn call(
         &self,
         mut req: ServiceRequest,
@@ -251,9 +253,10 @@ where
                 .cloned()
                 .collect::<Vec<u8>>();
 
-            match public_key.verify(&content, &signature) {
-                Err(_) => Err(ErrorUnauthorized("Unauthorized")),
-                Ok(_) => {
+            match (public_key.verify(&content, &signature), data.reject) {
+                (Err(_), true) => Err(ErrorUnauthorized("Unauthorized")),
+                (Err(_), false) => todo!(),
+                (Ok(_), _) => {
                     let fut = srv.call(req);
                     let res = fut.await?;
                     Ok(res)
