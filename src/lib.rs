@@ -44,6 +44,10 @@ impl AuthenticatorBuilder {
             ..self
         }
     }
+    pub fn build(self) -> Ed25519Authenticator {
+        let data: MiddlewareData = self.into();
+        data.into()
+    }
 }
 
 pub struct Ed25519Authenticator {
@@ -67,6 +71,12 @@ where
             service: Rc::new(service),
             data: Rc::new(self.data.clone()),
         }))
+    }
+}
+
+impl From<MiddlewareData> for Ed25519Authenticator {
+    fn from(data: MiddlewareData) -> Self {
+        Self { data }
     }
 }
 
