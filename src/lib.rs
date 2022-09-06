@@ -9,6 +9,43 @@ use ed25519_dalek::{PublicKey, Signature, Verifier};
 use futures_util::{future::LocalBoxFuture, FutureExt};
 use std::{future::Ready, pin::Pin, rc::Rc};
 
+#[derive(Default)]
+pub struct AuthenticatorBuilder {
+    public_key: Option<String>,
+    signature_header: Option<String>,
+    timestamp_header: Option<String>,
+    reject: bool,
+}
+impl AuthenticatorBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn public_key(self, public_key: &str) -> Self {
+        Self {
+            public_key: Some(public_key.into()),
+            ..self
+        }
+    }
+    pub fn signature_header(self, header: &str) -> Self {
+        Self {
+            signature_header: Some(header.into()),
+            ..self
+        }
+    }
+    pub fn timestamp_header(self, header: &str) -> Self {
+        Self {
+            timestamp_header: Some(header.into()),
+            ..self
+        }
+    }
+    pub fn reject(self) -> Self {
+        Self {
+            reject: true,
+            ..self
+        }
+    }
+}
+
 pub struct Ed25519Authenticator {
     pub data: MiddlewareData,
 }
