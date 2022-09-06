@@ -1,6 +1,4 @@
-use actix_middleware_ed25519_authentication::{
-    AuthenticatorBuilder, Ed25519Authenticator, MiddlewareData,
-};
+use actix_middleware_ed25519_authentication::AuthenticatorBuilder;
 use actix_web::{web, App, HttpResponse, HttpServer};
 use std::env;
 
