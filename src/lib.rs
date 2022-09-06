@@ -75,6 +75,22 @@ pub struct MiddlewareData {
     public_key: String,
     signature_header: String,
     timestamp_header: String,
+    reject: bool,
+}
+
+impl From<AuthenticatorBuilder> for MiddlewareData {
+    fn from(builder: AuthenticatorBuilder) -> Self {
+        Self {
+            public_key: builder.public_key.unwrap(),
+            signature_header: builder
+                .signature_header
+                .unwrap_or_else(|| "X-Signature-Ed25519".into()),
+            timestamp_header: builder
+                .timestamp_header
+                .unwrap_or_else(|| "X-Signature-Timestamp".into()),
+            reject: builder.reject,
+        }
+    }
 }
 
 impl Default for MiddlewareData {
@@ -83,6 +99,7 @@ impl Default for MiddlewareData {
             public_key: String::new(),
             signature_header: String::from("X-Signature-Ed25519"),
             timestamp_header: String::from("X-Signature-Timestamp"),
+            reject: true,
         }
     }
 }
@@ -103,6 +120,7 @@ impl MiddlewareData {
             public_key: public_key.into(),
             signature_header: signature_header.into(),
             timestamp_header: timestamp_header.into(),
+            reject: true,
         }
     }
 }

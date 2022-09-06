@@ -1,4 +1,6 @@
-use actix_middleware_ed25519_authentication::{Ed25519Authenticator, MiddlewareData};
+use actix_middleware_ed25519_authentication::{
+    AuthenticatorBuilder, Ed25519Authenticator, MiddlewareData,
+};
 use actix_web::{web, App, HttpResponse, HttpServer};
 use std::env;
 
@@ -12,7 +14,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(Ed25519Authenticator {
-                data: MiddlewareData::new(&public_key),
+                data: AuthenticatorBuilder::new().public_key(&public_key).into(),
             })
             .route("/", web::post().to(HttpResponse::Ok))
     })
