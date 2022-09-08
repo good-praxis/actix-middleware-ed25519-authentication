@@ -4,6 +4,7 @@
 //! incoming requests. Offering these features:
 //! - Signature validation via public key
 //! - Customizable header names for signature and timestamp
+//! - Authentication status is available in the request extensions.
 //! - Optional automatic rejection of invalid requests
 //!
 //! # Example
@@ -51,7 +52,7 @@ use std::{future::Ready, pin::Pin, rc::Rc};
 /// * `signature_header`: The name of the header that contains the signature.
 /// * `timestamp_header`: The name of the header that contains the timestamp.
 /// * `reject`: If true, the middleware will reject the request if it is not signed.
-///  If false, the middleware will allow the request to continue.
+///  If false, the middleware will allow the request to continue, adding [`AuthenticationInfo`] to the request extensions.
 pub struct AuthenticatorBuilder {
     public_key: Option<String>,
     signature_header: Option<String>,
@@ -100,7 +101,7 @@ impl AuthenticatorBuilder {
         }
     }
     /// Sets whether or not to reject requests that are not signed.
-    /// If not set, the default value is `true`.
+    /// If not set, the default value is `false`.
     /// *optional*
     pub fn reject(self) -> Self {
         Self {
