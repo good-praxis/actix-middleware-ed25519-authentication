@@ -34,7 +34,7 @@ use actix_web::{
     error::ErrorUnauthorized,
     http::header::HeaderValue,
     web::Bytes,
-    Error,
+    Error, HttpMessage,
 };
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use futures_util::{future::LocalBoxFuture, FutureExt};
@@ -160,7 +160,7 @@ struct MiddlewareData {
     public_key: String,
     signature_header: String,
     timestamp_header: String,
-    reject: bool, //TODO: Currently ignored
+    reject: bool,
 }
 
 impl From<AuthenticatorBuilder> for MiddlewareData {
@@ -176,6 +176,12 @@ impl From<AuthenticatorBuilder> for MiddlewareData {
             reject: builder.reject,
         }
     }
+}
+
+/// AuthenticationInfo is a struct that holds information about the authentication of a request. This struct is added to the request extensions.
+#[derive(Debug)]
+pub struct AuthenticationInfo {
+    pub authenticated: bool,
 }
 
 /// Ed25519AuthenticatorMiddleware is a middleware that verifies the signature of incoming request.
@@ -200,7 +206,6 @@ where
     forward_ready!(service);
 
     // TODO: refactor into standalone `pub fn`, offering usage with `wrap_fn()`
-    // TODO: respect `reject` bool
     /// # Panics
     /// If reject is set to false, and the signature is invalid, this function will panic. This is unimplemented behavior.
     fn call(
@@ -255,8 +260,18 @@ where
 
             match (public_key.verify(&content, &signature), data.reject) {
                 (Err(_), true) => Err(ErrorUnauthorized("Unauthorized")),
-                (Err(_), false) => todo!(),
+                (Err(_), false) => {
+                    req.extensions_mut().insert(AuthenticationInfo {
+                        authenticated: false,
+                    });
+                    let fut = srv.call(req);
+                    let res = fut.await?;
+                    Ok(res)
+                }
                 (Ok(_), _) => {
+                    req.extensions_mut().insert(AuthenticationInfo {
+                        authenticated: true,
+                    });
                     let fut = srv.call(req);
                     let res = fut.await?;
                     Ok(res)
