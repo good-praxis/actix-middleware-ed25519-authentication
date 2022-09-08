@@ -1,6 +1,6 @@
 [package]
 name = "actix-middleware-ed25519-authentication"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "A middleware designed to reject incoming requests that do not have a valid ed25519 signature"
 license = "MIT OR Apache-2.0"
