@@ -37,7 +37,7 @@ use actix_web::{
     web::Bytes,
     Error, HttpMessage,
 };
-use ed25519_dalek::{PublicKey, Signature, Verifier};
+use ed25519_dalek::{PublicKey, Signature, SignatureError, Verifier};
 use futures_util::{future::LocalBoxFuture, FutureExt};
 use std::{future::Ready, pin::Pin, rc::Rc};
 
@@ -156,8 +156,10 @@ impl From<MiddlewareData> for Ed25519Authenticator {
     }
 }
 
+/// MiddlewareData is a struct that holds the public key, signature header name, timestamp header name, and a boolean value that indicates whether or not to reject requests.
+/// When used with the [`authenticate_request`](fn.authenticate_request.html) function, the rejection boolean is ignored.
 #[derive(Clone, Debug)]
-struct MiddlewareData {
+pub struct MiddlewareData {
     public_key: String,
     signature_header: String,
     timestamp_header: String,
@@ -175,6 +177,18 @@ impl From<AuthenticatorBuilder> for MiddlewareData {
                 .timestamp_header
                 .unwrap_or_else(|| "X-Signature-Timestamp".into()),
             reject: builder.reject,
+        }
+    }
+}
+
+impl MiddlewareData {
+    /// Creates a new `MiddlewareData` with default headers. Intended to be used with the [`authenticate_request`](fn.authenticate_request.html) function.
+    pub fn new(public_key: &str) -> Self {
+        Self {
+            public_key: public_key.into(),
+            signature_header: "X-Signature-Ed25519".into(),
+            timestamp_header: "X-Signature-Timestamp".into(),
+            reject: false,
         }
     }
 }
@@ -206,7 +220,6 @@ where
 
     forward_ready!(service);
 
-    // TODO: refactor into standalone `pub fn`, offering usage with `wrap_fn()`
     /// # Panics
     /// If reject is set to false, and the signature is invalid, this function will panic. This is unimplemented behavior.
     fn call(
@@ -222,44 +235,9 @@ where
         let srv = self.service.clone();
 
         async move {
-            let body = req.extract::<Bytes>().await?;
+            let verify = authenticate_request(&mut req, &data).await;
 
-            let default_header = HeaderValue::from_static("");
-
-            let public_key =
-                PublicKey::from_bytes(&hex::decode(&data.public_key).unwrap_or_else(|_| {
-                    println!("Couldn't decode public key!");
-                    Vec::<u8>::new()
-                }))
-                .unwrap();
-
-            let timestamp = req
-                .headers()
-                .get(data.timestamp_header.clone())
-                .unwrap_or(&default_header);
-
-            let signature = {
-                let header = req
-                    .headers()
-                    .get(data.signature_header.clone())
-                    .unwrap_or(&default_header);
-                let decoded_header = hex::decode(header).unwrap();
-
-                let mut sig_arr: [u8; 64] = [0; 64];
-                for (i, byte) in decoded_header.into_iter().enumerate() {
-                    sig_arr[i] = byte;
-                }
-                Signature::from_bytes(&sig_arr).unwrap()
-            };
-
-            let content = timestamp
-                .as_bytes()
-                .iter()
-                .chain(body.as_ref().iter())
-                .cloned()
-                .collect::<Vec<u8>>();
-
-            match (public_key.verify(&content, &signature), data.reject) {
+            match (verify, data.reject) {
                 (Err(_), true) => Err(ErrorUnauthorized("Unauthorized")),
                 (Err(_), false) => {
                     req.extensions_mut().insert(AuthenticationInfo {
@@ -281,4 +259,57 @@ where
         }
         .boxed_local()
     }
+}
+
+/// authenticate_request is a function that verifies the signature of an incoming request.
+/// Intended to allow for manual handling of authentication, or for use with other middleware.
+///
+/// # Arguments
+/// * `req` - mutable reference to the incoming request
+/// * `data` - reference to the [`MiddlewareData`] struct
+///
+/// Note: This function does not add the [`AuthenticationInfo`] struct to the request extensions.
+/// Additionally, this function does not reject requests if the signature is invalid.
+/// Instead, it returns a [`Result`] with an [`Error`] if the signature is invalid.
+pub async fn authenticate_request(
+    req: &mut ServiceRequest,
+    data: &MiddlewareData,
+) -> Result<(), SignatureError> {
+    let body = req.extract::<Bytes>().await.unwrap();
+
+    let default_header = HeaderValue::from_static("");
+
+    let public_key = PublicKey::from_bytes(&hex::decode(&data.public_key).unwrap_or_else(|_| {
+        println!("Couldn't decode public key!");
+        Vec::<u8>::new()
+    }))
+    .unwrap();
+
+    let timestamp = req
+        .headers()
+        .get(data.timestamp_header.clone())
+        .unwrap_or(&default_header);
+
+    let signature = {
+        let header = req
+            .headers()
+            .get(data.signature_header.clone())
+            .unwrap_or(&default_header);
+        let decoded_header = hex::decode(header).unwrap();
+
+        let mut sig_arr: [u8; 64] = [0; 64];
+        for (i, byte) in decoded_header.into_iter().enumerate() {
+            sig_arr[i] = byte;
+        }
+        Signature::from_bytes(&sig_arr).unwrap()
+    };
+
+    let content = timestamp
+        .as_bytes()
+        .iter()
+        .chain(body.as_ref().iter())
+        .cloned()
+        .collect::<Vec<u8>>();
+
+    public_key.verify(&content, &signature)
 }

@@ -11,7 +11,12 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            .wrap(AuthenticatorBuilder::new().public_key(&public_key).build())
+            .wrap(
+                AuthenticatorBuilder::new()
+                    .public_key(&public_key)
+                    .reject()
+                    .build(),
+            )
             .route("/", web::post().to(HttpResponse::Ok))
     })
     .bind(("127.0.0.1", PORT))?
