@@ -30,16 +30,21 @@
 //! .await
 //!```  
 //!
+use actix_http::{h1::Payload, Request};
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     error::ErrorUnauthorized,
     http::header::HeaderValue,
-    web::Bytes,
-    Error, HttpMessage,
+    web::BytesMut,
+    Error, HttpMessage, HttpRequest,
 };
 use ed25519_dalek::{PublicKey, Signature, SignatureError, Verifier};
-use futures_util::{future::LocalBoxFuture, FutureExt};
-use std::{future::Ready, pin::Pin, rc::Rc};
+use futures_util::{future::LocalBoxFuture, FutureExt, StreamExt};
+use std::{
+    future::{ready, Ready},
+    pin::Pin,
+    rc::Rc,
+};
 
 #[derive(Default)]
 /// `AuthenticatorBuilder` is a [builder](https://rust-unofficial.github.io/patterns/patterns/creational/builder.html) struct that holds the public key, signature header, timestamp header,
@@ -247,11 +252,11 @@ where
                     let res = fut.await?;
                     Ok(res)
                 }
-                (Ok(_), _) => {
-                    req.extensions_mut().insert(AuthenticationInfo {
+                (Ok(new_req), _) => {
+                    new_req.extensions_mut().insert(AuthenticationInfo {
                         authenticated: true,
                     });
-                    let fut = srv.call(req);
+                    let fut = srv.call(new_req); // FIXME: Panics
                     let res = fut.await?;
                     Ok(res)
                 }
@@ -274,8 +279,8 @@ where
 pub async fn authenticate_request(
     req: &mut ServiceRequest,
     data: &MiddlewareData,
-) -> Result<(), SignatureError> {
-    let body = req.extract::<Bytes>().await.unwrap();
+) -> Result<ServiceRequest, SignatureError> {
+    let (http_request, body) = req.parts_mut();
 
     let default_header = HeaderValue::from_static("");
 
@@ -285,13 +290,13 @@ pub async fn authenticate_request(
     }))
     .unwrap();
 
-    let timestamp = req
+    let timestamp = http_request
         .headers()
         .get(data.timestamp_header.clone())
         .unwrap_or(&default_header);
 
     let signature = {
-        let header = req
+        let header = http_request
             .headers()
             .get(data.signature_header.clone())
             .unwrap_or(&default_header);
@@ -304,12 +309,29 @@ pub async fn authenticate_request(
         Signature::from_bytes(&sig_arr).unwrap()
     };
 
+    let mut payload = BytesMut::new();
+
+    while let Some(item) = body.next().await {
+        if let Ok(b) = item {
+            payload.extend_from_slice(&b)
+        }
+    }
+
     let content = timestamp
         .as_bytes()
         .iter()
-        .chain(body.as_ref().iter())
+        .chain(&payload)
         .cloned()
         .collect::<Vec<u8>>();
 
-    public_key.verify(&content, &signature)
+    let mut new_payload = Payload::create(true);
+    new_payload.1.unread_data(payload.into());
+
+    match public_key.verify(&content, &signature) {
+        Err(e) => Err(e),
+        Ok(()) => Ok(ServiceRequest::from_parts(
+            http_request.to_owned(),
+            new_payload.1.into(),
+        )),
+    }
 }

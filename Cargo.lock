@@ -70,6 +70,7 @@ dependencies = [
 name = "actix-middleware-ed25519-authentication"
 version = "0.2.2"
 dependencies = [
+ "actix-http",
  "actix-web",
  "ed25519-dalek",
  "futures-util",

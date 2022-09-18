@@ -12,6 +12,7 @@ keywords = ["actix-web-middleware", "actix-middleware", "ed25519", "authenticati
 [dependencies]
 futures-util = "0"
 actix-web = "4"
+actix-http = "3"
 ed25519-dalek = "1"
 hex = "0.4"
 
