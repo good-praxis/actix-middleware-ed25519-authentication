@@ -30,21 +30,17 @@
 //! .await
 //!```  
 //!
-use actix_http::{h1::Payload, Request};
+use actix_http::h1::Payload;
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     error::ErrorUnauthorized,
     http::header::HeaderValue,
     web::BytesMut,
-    Error, HttpMessage, HttpRequest,
+    Error, HttpMessage,
 };
 use ed25519_dalek::{PublicKey, Signature, SignatureError, Verifier};
 use futures_util::{future::LocalBoxFuture, FutureExt, StreamExt};
-use std::{
-    future::{ready, Ready},
-    pin::Pin,
-    rc::Rc,
-};
+use std::{future::Ready, pin::Pin, rc::Rc};
 
 #[derive(Default)]
 /// `AuthenticatorBuilder` is a [builder](https://rust-unofficial.github.io/patterns/patterns/creational/builder.html) struct that holds the public key, signature header, timestamp header,
