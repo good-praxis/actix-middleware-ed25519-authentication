@@ -252,11 +252,11 @@ where
                     let res = fut.await?;
                     Ok(res)
                 }
-                (Ok(new_req), _) => {
-                    new_req.extensions_mut().insert(AuthenticationInfo {
+                (Ok(_), _) => {
+                    req.extensions_mut().insert(AuthenticationInfo {
                         authenticated: true,
                     });
-                    let fut = srv.call(new_req); // FIXME: Panics
+                    let fut = srv.call(req);
                     let res = fut.await?;
                     Ok(res)
                 }
@@ -279,7 +279,7 @@ where
 pub async fn authenticate_request(
     req: &mut ServiceRequest,
     data: &MiddlewareData,
-) -> Result<ServiceRequest, SignatureError> {
+) -> Result<(), SignatureError> {
     let (http_request, body) = req.parts_mut();
 
     let default_header = HeaderValue::from_static("");
@@ -324,14 +324,14 @@ pub async fn authenticate_request(
         .cloned()
         .collect::<Vec<u8>>();
 
-    let mut new_payload = Payload::create(true);
-    new_payload.1.unread_data(payload.into());
+    let (_, mut new_payload) = Payload::create(true);
+    new_payload.unread_data(payload.into());
 
     match public_key.verify(&content, &signature) {
         Err(e) => Err(e),
-        Ok(()) => Ok(ServiceRequest::from_parts(
-            http_request.to_owned(),
-            new_payload.1.into(),
-        )),
+        Ok(()) => {
+            req.set_payload(new_payload.into());
+            Ok(())
+        }
     }
 }
